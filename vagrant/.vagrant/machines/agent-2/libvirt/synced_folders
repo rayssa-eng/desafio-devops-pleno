@@ -1,1 +1,1 @@
-{}
+{"rsync":{"/vagrant":{"disabled":false,"guestpath":"/vagrant","hostpath":"/home/raycalm/Documents/desafio-pref-rj/pleno/desafio-devops-pleno/vagrant","type":"rsync","__vagrantfile":true,"owner":"vagrant","group":"vagrant"}}}
