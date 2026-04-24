@@ -1,0 +1,45 @@
+Vagrant.configure("2") do |config|
+    config.vm.box = "generic/ubuntu2204"
+    
+    # Token fixo para os agentes conseguirem se juntar ao servidor
+    K3S_TOKEN = "token-secreto-desafio-devops"
+  
+    # ==========================================
+    # NÓ 1: O Control Plane (Servidor)
+    # ==========================================
+    config.vm.define "server" do |server|
+      server.vm.hostname = "server"
+      server.vm.network "private_network", ip: "192.168.56.10"
+      server.vm.provider :libvirt do |lv|
+        lv.memory = 4096 # O server roda a API do K8s e futuramente o Istiod
+        lv.cpus = 2
+      end
+      
+      server.vm.provision "shell", inline: <<-SHELL
+        echo "Subindo o Control Plane..."
+        curl -sfL https://get.k3s.io | K3S_TOKEN=#{K3S_TOKEN} INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode 644 --node-taint CriticalAddonsOnly=true:NoExecute" sh -
+      SHELL
+    end
+  
+    # ==========================================
+    # NÓS 2 e 3: Os Agentes (Workers)
+    # ==========================================
+    (1..2).each do |i|
+      config.vm.define "agent-#{i}" do |agent|
+        agent.vm.hostname = "agent-#{i}"
+        
+        # Os IPs serão 192.168.56.11 e 192.168.56.12
+        agent.vm.network "private_network", ip: "192.168.56.1#{i}"
+        agent.vm.provider :libvirt do |lv|
+          lv.memory = 2048 # Metade da RAM pra cada worker
+          lv.cpus = 2
+        end
+        
+        agent.vm.provision "shell", inline: <<-SHELL
+          echo "Ingressando Agente #{i} no cluster..."
+          # O agente aponta para o IP do servidor e usa o mesmo token
+          curl -sfL https://get.k3s.io | K3S_URL=https://192.168.56.10:6443 K3S_TOKEN=#{K3S_TOKEN} sh -
+        SHELL
+      end
+    end
+  end
