@@ -1,0 +1,110 @@
+# apps/service-1/manifest.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-1
+  namespace: service-1
+spec:
+  ports:
+  - port: 80
+    name: http
+  selector:
+    app: service-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-1
+  namespace: service-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-1
+  template:
+    metadata:
+      labels:
+        app: service-1
+    spec:
+      containers:
+      - name: app
+        image: kennethreitz/httpbin # Imagem sugerida
+        ports:
+        - containerPort: 80
+---
+# GATEWAY: Abre a porta de entrada do Cluster
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: service-1-gateway
+  namespace: service-1
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+# VIRTUAL SERVICE: Roteia o tráfego do Gateway para o Service-1
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: service-1-vs
+  namespace: service-1
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - service-1-gateway
+  http:
+  - route:
+    - destination:
+        host: service-1.service-1.svc.cluster.local
+        port:
+          number: 80
+---
+# JWT: Validação de quem entra
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: service-1
+spec:
+  selector:
+    matchLabels:
+      app: service-1
+  jwtRules:
+  - issuer: "testing@secure.istio.io"
+    jwksUri: "https://raw.githubusercontent.com/istio/istio/release-1.34/security/tools/jwt/samples/jwks.json"
+---
+# AUTH POLICY: Proíbe acesso sem JWT
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt
+  namespace: service-1
+spec:
+  selector:
+    matchLabels:
+      app: service-1
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        requestPrincipals: ["testing@secure.istio.io/*"]
+---
+# DESTINATION RULE: Força mTLS para o próximo passo (Service-2)
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: mtls-to-service-2
+  namespace: service-1
+spec:
+  host: service-2.service-2.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
