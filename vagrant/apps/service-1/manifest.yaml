@@ -26,11 +26,18 @@ spec:
       labels:
         app: service-1
     spec:
+      serviceAccountName: service-1-sa
       containers:
       - name: app
         image: kennethreitz/httpbin # Imagem sugerida
         ports:
         - containerPort: 80
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-1-sa
+  namespace: service-1
 ---
 # GATEWAY: Abre a porta de entrada do Cluster
 apiVersion: networking.istio.io/v1alpha3
@@ -97,7 +104,7 @@ spec:
     - source:
         requestPrincipals: ["testing@secure.istio.io/*"]
 ---
-# DESTINATION RULE: Força mTLS para o próximo passo (Service-2)
+# DESTINATION RULE: Força mTLS para o serviço-2, garantindo que a comunicação entre os serviços seja segura 
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
