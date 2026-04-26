@@ -1,6 +1,6 @@
 Vagrant.configure("2") do |config|
     config.vm.box = "generic/ubuntu2204"
-    config.vm.synced_folder ".", "/vagrant", type: "rsync"
+    config.vm.synced_folder ".", "/environment", type: "rsync"
     
     # Token fixo para os agentes conseguirem se juntar ao servidor
     K3S_TOKEN = "token-secreto-desafio-devops"

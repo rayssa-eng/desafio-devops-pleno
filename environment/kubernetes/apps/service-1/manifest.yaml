@@ -64,7 +64,7 @@ metadata:
   namespace: service-1
 spec:
   hosts:
-  - "*"
+  - "service-1.local"
   gateways:
   - service-1-gateway
   http:
