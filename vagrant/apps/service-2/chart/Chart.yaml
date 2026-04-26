@@ -1,0 +1,12 @@
+# apps/service-2/chart/Chart.yaml
+apiVersion: v2
+name: service-2-chart
+description: Helm chart para o Service-2 (Interno com restrição de Namespace)
+
+type: application
+
+# Versão do Chart
+version: 0.1.0
+
+# Versão do serviço
+appVersion: "1.0.0"

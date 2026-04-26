@@ -1,0 +1,22 @@
+# apps/service-2/chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "service-2-chart.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "service-2-chart.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "service-2-chart.name" . }}
+    spec:
+      serviceAccountName: {{ include "service-2-chart.fullname" . }}-sa
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.service.port }}

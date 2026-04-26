@@ -1,0 +1,14 @@
+# apps/service-2/chart/values.yaml
+replicaCount: 1
+
+image:
+  repository: kennethreitz/httpbin
+  tag: latest
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 80
+
+auth:
+  allowFrom:
+    - service-1
