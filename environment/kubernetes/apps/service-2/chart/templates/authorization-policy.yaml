@@ -12,4 +12,4 @@ spec:
   rules:
   - from:
     - source:
-        principals: ["cluster.local/ns/{{ .Values.auth.allowFrom }}/sa/{{ .Values.auth.allowFrom }}-sa"]
+        principals: ["cluster.local/ns/{{ .Values.authPolicy.allowFrom }}/sa/{{ .Values.authPolicy.allowFrom }}-sa"]

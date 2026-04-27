@@ -2,13 +2,15 @@
 replicaCount: 1
 
 image:
-  repository: kennethreitz/httpbin
-  tag: latest
+  repository: curlimages/curl
+  tag: "latest"
   pullPolicy: IfNotPresent
+command: ["/bin/sh", "-c"]
+args: ["while true; do echo -e 'HTTP/1.1 200 OK\n\n Service 2 is up' | nc -l -p 80; done & sleep infinity"]
 service:
   type: ClusterIP
   port: 80
 
-auth:
+authPolicy:
   allowFrom:
-    - service-1
+    - "service-1"
