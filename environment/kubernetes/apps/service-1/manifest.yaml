@@ -29,7 +29,14 @@ spec:
       serviceAccountName: service-1-sa
       containers:
       - name: app
-        image: kennethreitz/httpbin # Imagem sugerida
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do 
+              echo -e "HTTP/1.1 200 OK\n\n Service 1 is up" | nc -l -p 80; 
+            done & 
+            sleep infinity
         ports:
         - containerPort: 80
 ---
@@ -56,7 +63,7 @@ spec:
     hosts:
     - "*"
 ---
-# VIRTUAL SERVICE: Roteia o tráfego do Gateway para o Service-1
+# VIRTUAL SERVICE 1: Entrada (Roteia o Ingress Gateway para o Service-1)
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -74,6 +81,22 @@ spec:
         port:
           number: 80
 ---
+# VIRTUAL SERVICE 2: (Roteamento do Service-1 para o Service-2)
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: route-to-service-2
+  namespace: service-1
+spec:
+  hosts:
+  - service-2.service-2.svc.cluster.local
+  http:
+  - route:
+    - destination:
+        host: service-2.service-2.svc.cluster.local
+        port:
+          number: 80
+---
 # JWT: Validação de quem entra
 apiVersion: security.istio.io/v1beta1
 kind: RequestAuthentication
@@ -86,7 +109,7 @@ spec:
       app: service-1
   jwtRules:
   - issuer: "testing@secure.istio.io"
-    jwksUri: "https://raw.githubusercontent.com/istio/istio/release-1.34/security/tools/jwt/samples/jwks.json"
+    jwksUri: "https://raw.githubusercontent.com/istio/istio/master/security/tools/jwt/samples/jwks.json"
 ---
 # AUTH POLICY: Proíbe acesso sem JWT
 apiVersion: security.istio.io/v1beta1

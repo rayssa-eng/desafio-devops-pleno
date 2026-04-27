@@ -38,7 +38,14 @@ spec:
       serviceAccountName: service-3-sa # Usando a identidade própria
       containers:
       - name: app
-        image: kennethreitz/httpbin
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do 
+              echo -e "HTTP/1.1 200 OK\n\n Service 1 is up" | nc -l -p 80; 
+            done & 
+            sleep infinity
         ports:
         - containerPort: 80
 
@@ -66,7 +73,7 @@ metadata:
   namespace: service-3
 spec:
   hosts:
-  - "service-2.local"
+  - "service-3.local"
   gateways:
   - service-3-gateway
   http:
@@ -88,7 +95,7 @@ spec:
       app: service-3
   jwtRules:
   - issuer: "testing@secure.istio.io"
-    jwksUri: "https://raw.githubusercontent.com/istio/istio/release-1.34/security/tools/jwt/samples/jwks.json"
+    jwksUri: "https://raw.githubusercontent.com/istio/istio/master/security/tools/jwt/samples/jwks.json"
 ---
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
