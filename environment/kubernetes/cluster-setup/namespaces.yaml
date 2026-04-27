@@ -18,3 +18,13 @@ metadata:
   name: service-3
   labels:
     istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: autoscaling

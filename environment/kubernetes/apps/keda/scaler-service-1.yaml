@@ -1,0 +1,26 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: service-1-scaler
+  namespace: service-1
+spec:
+  scaleTargetRef:
+    name: service-1
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 60 # Tempo para estabilizar antes de diminuir
+  cooldownPeriod: 30 # Tempo para diminuir (scale-down) após a carga parar
+  pollingInterval: 5  # Frequência de checagem no Prometheus
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+      metricName: istio_requests_total
+      # Query: Soma do incremento de requisições no service-1 nos últimos 2 minutos
+      query: |
+        sum(increase(istio_requests_total{destination_app="service-1", reporter="destination"}[2m]))
+      threshold: '6000' # Representa uma média de 50 req/s dentro da janela de 120s
