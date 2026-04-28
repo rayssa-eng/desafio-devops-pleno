@@ -60,8 +60,8 @@ O ambiente foi projetado para exigir o mínimo de intervenção humana possível
 Baixe o código e navegue até a pasta de provisionamento do Vagrant:
 
 ```bash
-git clone <URL_DO_SEU_REPOSITORIO>
-cd <NOME_DA_PASTA>/environment/vagrant
+git clone https://github.com/rayssa-eng/desafio-devops-pleno.git
+cd desafio-devops-pleno/environment/vagrant
 ```
 
 ### Passo 2: Executar o Setup Automatizado
@@ -91,7 +91,7 @@ Para comprovar a eficácia das políticas de segurança aplicadas (Zero Trust, m
 *Nota: Certifique-se de estar com as portas mapeadas ou executando de dentro do host que enxerga o cluster.*
 
 ```bash
-cd <NOME_DA_PASTA>/environment/vagrant
+cd desafio-devops-pleno/environment/vagrant
 vagrant ssh server
 
 # Exporta o IP do Node (Ingress Gateway) e o Token JWT válido
