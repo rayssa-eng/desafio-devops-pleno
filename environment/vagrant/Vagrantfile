@@ -37,10 +37,15 @@ Vagrant.configure("2") do |config|
       SHELL
 
       # 2. Execução do Bootstrap de Aplicação (KEDA, Prometheus, services 1-3)
-      server.vm.provision "shell", 
-      inline: "bash /home/vagrant/environment/vagrant/bootstrap.sh",
-      privileged: false,
-      env: { "KUBECONFIG" => "/etc/rancher/k3s/k3s.yaml" }
+      server.vm.provision "shell", inline: <<-SHELL
+        sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+        
+        if ! grep -q "KUBECONFIG" /home/vagrant/.bashrc; then
+          echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> /home/vagrant/.bashrc
+        fi
+        
+        bash /home/vagrant/environment/vagrant/bootstrap.sh
+      SHELL
     end
   
     # ==========================================

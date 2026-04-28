@@ -12,4 +12,6 @@ spec:
   rules:
   - from:
     - source:
-        principals: ["cluster.local/ns/{{ .Values.authPolicy.allowFrom }}/sa/{{ .Values.authPolicy.allowFrom }}-sa"]
+        principals: 
+        {{- $serviceName := index .Values.authPolicy.allowFrom 0 }}
+        - {{ printf "cluster.local/ns/%s/sa/%s-sa" $serviceName $serviceName | quote }}
