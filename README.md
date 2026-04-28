@@ -108,15 +108,21 @@ Como o `service-1` e o `service-3` são expostos externamente, ambos exigem vali
    ```bash
    curl -i -H "Host: service-1.local" -H "Authorization: Bearer $TOKEN" http://$CLUSTER_IP/
    ```
+   ![Demonstração 200](imagens/demo1s1.png)
 
 2. **Sem token (Esperado: 403 Forbidden):**
    ```bash
    curl -i -H "Host: service-1.local" http://$CLUSTER_IP/
    ```
+
+   ![Demonstração 403](imagens/demo2s1.png)
+
 3. **Com token inválido (Esperado: 401 Unauthorized):**
    ```bash
    curl -i -H "Host: service-1.local" -H "Authorization: Bearer token-adulterado" http://$CLUSTER_IP/
    ```
+
+   ![401](imagens/demo3s1.png)
 
 > **Observação:** > Por *design* do Istio, quando uma requisição é enviada **sem** token, o `RequestAuthentication` a ignora e a avaliação cai na `AuthorizationPolicy`. Como a requisição se torna anônima e não possui os `requestPrincipals` exigidos, o Istio a bloqueia nativamente via RBAC com um **403 Forbidden** (e não 401). O **401 Unauthorized** é retornado exclusivamente quando o token está presente no cabeçalho, mas falha na validação criptográfica.
 
@@ -125,36 +131,44 @@ Como o `service-1` e o `service-3` são expostos externamente, ambos exigem vali
 ```bash
 curl -i -H "Host: service-3.local" -H "Authorization: Bearer $TOKEN" http://$CLUSTER_IP/
 ```
+![200](imagens/demo1s3.png)
+
 2. **Sem token (Esperado: 403 Forbidden):**
 ```bash
 curl -i -H "Host: service-3.local" http://$CLUSTER_IP/
 ```
+![403](imagens/demo2s3.png)
+
 3. **Com token inválido (Esperado: 401 Unauthorized):**
 ```bash
 curl -i -H "Host: service-3.local" -H "Authorization: Bearer token-adulterado" http://$CLUSTER_IP/
 ```
+![401](imagens/demo3s3.png)
+
 
 ### 5.2. Bloqueio de acesso direto ao `service-2`
 
-O `service-2` é um backend privado. Sua `AuthorizationPolicy` só permite requisições originadas pela Service Account do `service-1`.
+A `AuthorizationPolicy` do `service-2` só permite requisições originadas pela Service Account do `service-1`.
 
 1. **Acesso bloqueado por fora do Ingress:** (O serviço sequer é exposto via VirtualService para a rua).
 ```bash
 curl -i -H "Host: service-2.local" http://$CLUSTER_IP/ 
 # Esperado: 404 Not Found (O Ingress não conhece essa rota externa)
 ```
+![404](imagens/demo1s2.png)
 
 2. **Falha ao tentar acessar o `service-2` a partir do `service-3`:**
 ```bash
 kubectl exec -it deploy/service-3 -n service-3 -- curl -i http://service-2.service-2.svc.cluster.local
 # Esperado: 403 Forbidden (RBAC: access denied - O service-2 só aceita do service-1)
 ```
-
+![403](imagens/demo2s2.png)
 3. **Acesso autorizado via `service-1`:**
 ```bash
 kubectl exec -it deploy/service-1 -n service-1 -- curl -i http://service-2.service-2.svc.cluster.local
 # Esperado: 200 OK
 ```
+![200](imagens/demo3s2.png)
 
 ### 5.3. Isolamento lateral do `service-3`
 
@@ -165,11 +179,15 @@ O `service-3` possui uma política de `DENY` para tráfego interno originado dos
 kubectl exec -it deploy/service-1 -n service-1 -- curl -i http://service-3.service-3.svc.cluster.local
 # Esperado: 403 Forbidden (RBAC: access denied)
 ```
+![403](imagens/demo4s3.png)
+
 2. **Falha ao tentar acessar o `service-3` a partir do `service-2`:**
 ```bash
 kubectl exec -it deploy/service-2 -n service-2 -- curl -i http://service-3.service-3.svc.cluster.local
 # Esperado: 403 Forbidden (RBAC: access denied)
 ```
+![403](imagens/demo5s3.png)
+
 
 ## 6. Justificativa de decisões não triviais
 
@@ -200,8 +218,11 @@ Durante o desenvolvimento da infraestrutura, algumas decisões arquiteturais for
 * **Threshold (Gatilho):** Definido no `ScaledObject` como `6000` requisições acumuladas. Na janela de 2 minutos, isso equivale a um limite de tolerância de aproximadamente **50 Requisições por Segundo (RPS)** por réplica antes que a latência comece a degradar e o KEDA decida escalar.
 
 ### Script k6 e Demonstração do Fluxo
-Para validar a arquitetura, foi criado um script de teste de carga utilizando a ferramenta **k6** (`/tests/load-test.js`). 
+Para validar a arquitetura, foi criado um script de teste de carga utilizando a ferramenta **k6** (`environment/kubernetes/scripts/load-test.js`). 
 
 **Configuração do teste:**
 * **Carga:** 10 Virtual Users (VUs) simultâneos rodando por 1 minuto.
 * **Segurança:** O script injeta o token estático validado dinamicamente no header `Authorization: Bearer` para passar pela `AuthorizationPolicy` do Istio.
+
+![alt text](imagens/k6-run.png) ![alt text](imagens/scaleup-to3r.png) ![alt text](imagens/scaledown-to1r.png)
+![alt text](hpa-1r.png)

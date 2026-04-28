@@ -43,7 +43,7 @@ spec:
         args:
           - |
             while true; do 
-              echo -e "HTTP/1.1 200 OK\n\n Service 1 is up" | nc -l -p 80; 
+              echo -e "HTTP/1.1 200 OK\n\nService 3 is up" | nc -l -p 80; 
             done & 
             sleep infinity
         ports:
