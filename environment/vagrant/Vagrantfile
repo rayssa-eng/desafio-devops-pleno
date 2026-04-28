@@ -1,3 +1,13 @@
+require 'securerandom'
+token_file = ".k3s_token"
+
+if File.exist?(token_file)
+  K3S_TOKEN = File.read(token_file).strip
+else
+  K3S_TOKEN = SecureRandom.hex(16) # Gera um token aleatório
+  File.write(token_file, K3S_TOKEN)
+end
+
 Vagrant.configure("2") do |config|
     config.vm.box = "generic/ubuntu2204"
     config.vm.synced_folder "../../environment", "/home/vagrant/environment", type: "rsync"
@@ -12,14 +22,25 @@ Vagrant.configure("2") do |config|
       server.vm.hostname = "server"
       server.vm.network "private_network", ip: "192.168.56.10"
       server.vm.provider :libvirt do |lv|
-        lv.memory = 4096 # O server roda a API do K8s e futuramente o Istiod
+        lv.memory = 4096 # O server vai precisar rodar a API do K8s e futuramente o Istiod
         lv.cpus = 2
       end
       
+      # 1. Instalação do K3s
       server.vm.provision "shell", inline: <<-SHELL
-        echo "Subindo o Control Plane..."
-        curl -sfL https://get.k3s.io | K3S_TOKEN=#{K3S_TOKEN} INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode 644 --node-taint CriticalAddonsOnly=true:NoExecute" sh -
+      echo "Subindo o Control Plane..."
+      curl -sfL https://get.k3s.io | K3S_TOKEN=#{K3S_TOKEN} INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode 644 --node-taint CriticalAddonsOnly=true:NoExecute" sh -
+      
+      # Aguarda o arquivo de configuração estar pronto antes de prosseguir
+      until [ -f /etc/rancher/k3s/k3s.yaml ]; do sleep 2; done
+      echo "K3s pronto!"
       SHELL
+
+      # 2. Execução do Bootstrap de Aplicação (KEDA, Prometheus, services 1-3)
+      server.vm.provision "shell", 
+      inline: "bash /home/vagrant/environment/vagrant/bootstrap.sh",
+      privileged: false,
+      env: { "KUBECONFIG" => "/etc/rancher/k3s/k3s.yaml" }
     end
   
     # ==========================================
