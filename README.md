@@ -225,4 +225,4 @@ Para validar a arquitetura, foi criado um script de teste de carga utilizando a 
 * **Segurança:** O script injeta o token estático validado dinamicamente no header `Authorization: Bearer` para passar pela `AuthorizationPolicy` do Istio.
 
 ![alt text](imagens/k6-run.png) ![alt text](imagens/scaleup-to3r.png) ![alt text](imagens/scaledown-to1r.png)
-![alt text](hpa-1r.png)
+![alt text](imagens/hpa-1r.png)
