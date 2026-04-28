@@ -83,7 +83,94 @@ A partir deste ponto, o processo é 100% automatizado. Você acompanhará no ter
 > ⏳ **Tempo estimado:** Entre 5 e 8 minutos (dependendo da velocidade de download das imagens).
 > 
 > Ao final da execução, os pods estarão subindo, com a maioria em estado `Running` e você verá a mensagem: **"🚀 Ambiente provisionado"**.
-   
+
+## 5. Comandos de Validação
+
+Para comprovar a eficácia das políticas de segurança aplicadas (Zero Trust, mTLS e RBAC), prepare o ambiente exportando as variáveis abaixo. 
+
+*Nota: Certifique-se de estar com as portas mapeadas ou executando de dentro do host que enxerga o cluster.*
+
+```bash
+cd <NOME_DA_PASTA>/environment/vagrant
+vagrant ssh server
+
+# Exporta o IP do Node (Ingress Gateway) e o Token JWT válido
+export CLUSTER_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+export TOKEN=$(curl -s https://raw.githubusercontent.com/istio/istio/master/security/tools/jwt/samples/demo.jwt)
+```
+
+### 5.1. Cenários de Autenticação JWT
+
+Como o `service-1` e o `service-3` são expostos externamente, ambos exigem validação de token na borda. Simulamos as requisições passando o cabeçalho `Host` para que o *VirtualService* faça o roteamento correto.
+
+**Para o `service-1`:**
+1. **Com token válido (Esperado: 200 OK):**
+   ```bash
+   curl -i -H "Host: service-1.local" -H "Authorization: Bearer $TOKEN" http://$CLUSTER_IP/
+   ```
+
+2. **Sem token (Esperado: 403 Forbidden):**
+   ```bash
+   curl -i -H "Host: service-1.local" http://$CLUSTER_IP/
+   ```
+3. **Com token inválido (Esperado: 401 Unauthorized):**
+   ```bash
+   curl -i -H "Host: service-1.local" -H "Authorization: Bearer token-adulterado" http://$CLUSTER_IP/
+   ```
+
+> **Observação:** > Por *design* do Istio, quando uma requisição é enviada **sem** token, o `RequestAuthentication` a ignora e a avaliação cai na `AuthorizationPolicy`. Como a requisição se torna anônima e não possui os `requestPrincipals` exigidos, o Istio a bloqueia nativamente via RBAC com um **403 Forbidden** (e não 401). O **401 Unauthorized** é retornado exclusivamente quando o token está presente no cabeçalho, mas falha na validação criptográfica.
+
+**Para o `service-3`:**
+1. **Com token válido (Esperado: 200 OK):**
+```bash
+curl -i -H "Host: service-3.local" -H "Authorization: Bearer $TOKEN" http://$CLUSTER_IP/
+```
+2. **Sem token (Esperado: 403 Forbidden):**
+```bash
+curl -i -H "Host: service-3.local" http://$CLUSTER_IP/
+```
+3. **Com token inválido (Esperado: 401 Unauthorized):**
+```bash
+curl -i -H "Host: service-3.local" -H "Authorization: Bearer token-adulterado" http://$CLUSTER_IP/
+```
+
+### 5.2. Bloqueio de acesso direto ao `service-2`
+
+O `service-2` é um backend privado. Sua `AuthorizationPolicy` só permite requisições originadas pela Service Account do `service-1`.
+
+1. **Acesso bloqueado por fora do Ingress:** (O serviço sequer é exposto via VirtualService para a rua).
+```bash
+curl -i -H "Host: service-2.local" http://$CLUSTER_IP/ 
+# Esperado: 404 Not Found (O Ingress não conhece essa rota externa)
+```
+
+2. **Falha ao tentar acessar o `service-2` a partir do `service-3`:**
+```bash
+kubectl exec -it deploy/service-3 -n service-3 -- curl -i http://service-2.service-2.svc.cluster.local
+# Esperado: 403 Forbidden (RBAC: access denied - O service-2 só aceita do service-1)
+```
+
+3. **Acesso autorizado via `service-1`:**
+```bash
+kubectl exec -it deploy/service-1 -n service-1 -- curl -i http://service-2.service-2.svc.cluster.local
+# Esperado: 200 OK
+```
+
+### 5.3. Isolamento lateral do `service-3`
+
+O `service-3` possui uma política de `DENY` para tráfego interno originado dos serviços 1 e 2. 
+
+1. **Falha ao tentar acessar o `service-3` a partir do `service-1`:**
+```bash
+kubectl exec -it deploy/service-1 -n service-1 -- curl -i http://service-3.service-3.svc.cluster.local
+# Esperado: 403 Forbidden (RBAC: access denied)
+```
+2. **Falha ao tentar acessar o `service-3` a partir do `service-2`:**
+```bash
+kubectl exec -it deploy/service-2 -n service-2 -- curl -i http://service-3.service-3.svc.cluster.local
+# Esperado: 403 Forbidden (RBAC: access denied)
+```
+
 ## 6. Justificativa de decisões não triviais
 
 Durante o desenvolvimento da infraestrutura, algumas decisões arquiteturais foram tomadas para balancear segurança, performance e viabilidade do ambiente local:
@@ -100,37 +187,21 @@ Durante o desenvolvimento da infraestrutura, algumas decisões arquiteturais for
 
 ---
 
-## 7. (Bônus) Autoscaling Orientado a Eventos (KEDA + Prometheus)
-
-Para este desafio, foi implementado um pipeline de autoscaling preditivo baseado na **camada L7 (Aplicação)**.
+## 7. (Bônus) Autoscaling orientado a eventos (KEDA + Prometheus)
 
 ### Métrica e Algoritmo Escolhidos
 * **Métrica:** `istio_requests_total` (Extraída diretamente da telemetria do Envoy/Istio via Prometheus).
-* **Query PromQL:** `sum(increase(istio_requests_total{destination_app="service-1", reporter="destination"}[2m]))`
-* **Justificativa do Algoritmo:** A função `increase` sobre uma janela móvel de `[2m]` (dois minutos) foi escolhida estrategicamente em vez da função `rate`. Isso permite que a infraestrutura absorva picos súbitos sem sofrer com *flapping* (o efeito "ioiô" de criar e destruir pods repetidamente por causa de variações de microssegundos), proporcionando estabilidade para a malha.
+
+* **Query:** `sum(increase(istio_requests_total{destination_app="service-1", reporter="destination"}[2m]))`
+
+* **Justificativa do Algoritmo e Métrica:** Foi utilizada a função `increase` em uma janela móvel de `[2m]` em vez da função `rate`. O `increase` trabalha com a volumetria absoluta e inteira de requisições na janela, facilitando o cálculo exato do *threshold* pelo HPA, que lida melhor com números inteiros do que com as frações por segundo geradas pelo `rate`. 
+* A janela de 2 minutos atua suavizando anomalias (*spikes* de poucos segundos), impedindo um *scale-up* precipitado. Paralelamente, o controle de *flapping* (efeito "ioiô" de criação e destruição rápida) fica delegado ao `cooldownPeriod` nativo do KEDA, que garante um *scale-down* gracioso e atrasado caso o tráfego caia.
+
 * **Threshold (Gatilho):** Definido no `ScaledObject` como `6000` requisições acumuladas. Na janela de 2 minutos, isso equivale a um limite de tolerância de aproximadamente **50 Requisições por Segundo (RPS)** por réplica antes que a latência comece a degradar e o KEDA decida escalar.
 
 ### Script k6 e Demonstração do Fluxo
 Para validar a arquitetura, foi criado um script de teste de carga utilizando a ferramenta **k6** (`/tests/load-test.js`). 
 
-**Configuração do Teste:**
+**Configuração do teste:**
 * **Carga:** 10 Virtual Users (VUs) simultâneos rodando por 1 minuto.
 * **Segurança:** O script injeta o token estático validado dinamicamente no header `Authorization: Bearer` para passar pela `AuthorizationPolicy` do Istio.
-
-**Ciclo de Vida Demonstrado (Scale-up e Scale-down):**
-1. **Pico de Carga:** O k6 injeta um volume de aproximadamente 94 RPS contra o `service-1-gateway`.
-2. **Scale-up Instantâneo:** O Prometheus raspa a métrica, que cruza o threshold de 6000. O HPA gerenciado pelo KEDA entra em ação e dimensiona as réplicas do `service-1` de 1 para 5 (limite máximo estabelecido).
-3. **Absorção:** O tráfego é balanceado pelo Istio entre os 5 pods ativos, garantindo 200 OK em todas as requisições.
-4. **Scale-down Automático:** Após o fim do teste, o KEDA identifica a ausência de novas requisições. Respeitando a janela de *cooldown* configurada no cluster, os pods excedentes são finalizados graciosamente, retornando a capacidade ao mínimo de 1 réplica para otimização de custos de nuvem.
-   
-   
-   
-   
-   . O Conflito (Port Bind Error)
-Se você instalar o Istio em um k3s que já está rodando o Traefik:
-
-    O Traefik já vai estar escutando nas portas 80 e 443.
-
-    Quando o Istio Ingress Gateway tentar subir, ele também vai tentar se "conectar" (bind) às portas 80 e 443 do host.
-
-    O Kubernetes vai falhar a subida do pod do Istio (ficará em estado Pending ou CrashLoopBackOff) acusando que a porta já está em uso (Address already in use).
